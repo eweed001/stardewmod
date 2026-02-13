@@ -1,8 +1,0 @@
-/Users/emilyweed/projects/stardew-mod/StardewModTimeToSleep/bin/Debug/net6.0/StardewModTimeToSleep.deps.json
-/Users/emilyweed/projects/stardew-mod/StardewModTimeToSleep/bin/Debug/net6.0/StardewModTimeToSleep.dll
-/Users/emilyweed/projects/stardew-mod/StardewModTimeToSleep/obj/Debug/net6.0/StardewModTimeToSleep.csproj.AssemblyReference.cache
-/Users/emilyweed/projects/stardew-mod/StardewModTimeToSleep/obj/Debug/net6.0/StardewModTimeToSleep.GeneratedMSBuildEditorConfig.editorconfig
-/Users/emilyweed/projects/stardew-mod/StardewModTimeToSleep/obj/Debug/net6.0/StardewModTimeToSleep.AssemblyInfoInputs.cache
-/Users/emilyweed/projects/stardew-mod/StardewModTimeToSleep/obj/Debug/net6.0/StardewModTimeToSleep.AssemblyInfo.cs
-/Users/emilyweed/projects/stardew-mod/StardewModTimeToSleep/obj/Debug/net6.0/StardewModTimeToSleep.csproj.CoreCompileInputs.cache
-/Users/emilyweed/projects/stardew-mod/StardewModTimeToSleep/obj/Debug/net6.0/StardewModTimeToSleep.dll
