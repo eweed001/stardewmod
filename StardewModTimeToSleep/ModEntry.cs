@@ -2,6 +2,9 @@ using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
 using StardewModTimeToSleep.World;
+using StardewModTimeToSleep.PathFinding;
+using Microsoft.Xna.Framework;
+using StardewModTimeToSleep.services;
 
 namespace StardewModTimeToSleep
 {
@@ -12,7 +15,9 @@ namespace StardewModTimeToSleep
         /*********
         ** Fields
         *********/
-        private WorldGraphBuilder worldGraphBuilder = null!;
+        private WorldGraphService worldGraphService = null!;
+        private AStar aStar = null!;
+        private PathFindingService pathFindingService = null!;
 
         /*********
         ** Public methods
@@ -23,7 +28,10 @@ namespace StardewModTimeToSleep
         public override void Entry(IModHelper helper)
         {
 
-            this.worldGraphBuilder = new WorldGraphBuilder(this.Monitor);
+            this.worldGraphService = new WorldGraphService(this.Monitor);
+            this.aStar = new AStar(this.Monitor);
+            this.pathFindingService = new PathFindingService(this.Monitor, 
+                this.worldGraphService);
 
             helper.Events.GameLoop.SaveLoaded += this.OnSaveLoaded;
             helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
@@ -42,7 +50,7 @@ namespace StardewModTimeToSleep
         private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
         {
             this.Monitor.Log("Building world graph...", LogLevel.Debug);
-            this.worldGraphBuilder.InitLocationData();
+            this.worldGraphService.InitLocationData();
             this.Monitor.Log("World graph built.", LogLevel.Debug);
         }
 
@@ -66,7 +74,25 @@ namespace StardewModTimeToSleep
         /// <summary>Updates the timeToHome</summary>
         private void updateTimeToHome()
         {
-            // todo 
+            GameLocation location = Game1.player.currentLocation;
+
+            Point start = Game1.player.TilePoint;
+
+            this.Monitor.Log($"Player tile: {start}", LogLevel.Info);
+
+            Monitor.Log(
+                $"Location: {Game1.currentLocation.Name}, " +
+                $"Player: {Game1.player.TilePoint}",
+                LogLevel.Info
+            );
+            
+            int distance = this.pathFindingService.FindDistanceToHome(
+                location,
+                start
+            );
+
+            this.Monitor.Log($"Distance to home: {distance} tiles", 
+                LogLevel.Info);
         }
 
     }

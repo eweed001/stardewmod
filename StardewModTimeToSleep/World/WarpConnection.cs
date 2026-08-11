@@ -8,6 +8,9 @@ public sealed class WarpConnection
     //The location this warp leads to
     public string TargetName { get; init; } = "";
 
+    //The location of this warp
+    public string SourceName { get; init; } = "";
+
     // tile you stand on to leave this map
     public Point ExitTile { get; init; }
 
@@ -20,5 +23,9 @@ public sealed class WarpConnection
     }
 
     public bool IsMinecart { get; init; } = false;
+
+    // IEnumerable<WarpConnection> GetWarps(string locationName);
+
+    // WorldLocation? GetLocation(string locationName);
     
 }
