@@ -40,71 +40,15 @@ internal class WorldGraphService
 
     foreach (GameLocation location in Game1.locations)
     {
-      Monitor.Log(
-          $"Checking buildings for {location.Name}: " +
-          $"{location.buildings?.Count ?? 0} buildings",
-          LogLevel.Info
-      );
 
       var worldLocation = new WorldLocation
       {
         Location = location
       };
 
-      if (location.buildings != null)
-      {
-          foreach (Building building in location.buildings)
-          {
-              if (building.indoors.Value == null)
-                  continue;
-
-              Point door = building.getPointForHumanDoor();
-
-               GameLocation indoors = building.indoors.Value;
-
-              if (indoors.warps.Count == 0)
-              {
-                  Monitor.Log(
-                      $"Building {indoors.Name} has no interior warp.",
-                      LogLevel.Warn
-                  );
-
-                  continue;
-              }
-
-              Warp interiorWarp = indoors.warps[0];
-
-              Point arrivalTile = new(
-                  interiorWarp.X,
-                  interiorWarp.Y - 1
-              );
-
-              worldLocation.Buildings.Add(new BuildingConnection
-              {
-                  SourceName = location.Name,
-                  TargetName = indoors.Name,
-                  ExitTile = door,
-                  ArrivalTile = arrivalTile
-              });
-
-
-              Monitor.Log(
-                  $"Building connection: {location.Name} " +
-                  $"({door.X},{door.Y}) -> " +
-                  $"{indoors.Name} ({arrivalTile.X},{arrivalTile.Y})",
-                  LogLevel.Info
-              );
-          }
-      }
-
+      //Normal GameLocation warps
       foreach (Warp warp in location.warps)
       {
-
-        Monitor.Log(
-            $"Warp: {location.Name} ({warp.X},{warp.Y}) -> " +
-            $"{warp.TargetName} ({warp.TargetX},{warp.TargetY})",
-            LogLevel.Info
-        );
         
         worldLocation.Warps.Add(new WarpConnection
         {
@@ -113,13 +57,52 @@ internal class WorldGraphService
           ExitTile = new Point(warp.X, warp.Y),
           ArrivalTile = new Point(warp.TargetX, warp.TargetY)
         });
+
          Monitor.Log($"{location.Name} -> {warp.TargetName}",
                     LogLevel.Trace);
       }
+
+      // Connections to buildings with their own GameLocation
+      if (location.buildings != null)
+        {
+            foreach (Building building in location.buildings)
+            {
+                if (building.indoors.Value == null)
+                    continue;
+
+                Point door = building.getPointForHumanDoor();
+                GameLocation indoors = building.indoors.Value;
+
+                worldLocation.Buildings.Add(new BuildingConnection
+                {
+                    SourceName = location.Name,
+                    TargetName = indoors.Name,
+                    ExitTile = door,
+                    ArrivalTile = Point.Zero // temporary
+                });
+
+                Monitor.Log(
+                    $"Building connection: {location.Name} " +
+                    $"({door.X},{door.Y}) -> {indoors.Name}",
+                    LogLevel.Info
+                );
+            }
+        }
+
       Graph.Locations.Add(location.Name, worldLocation);
     }
-
+    AddFarmhouseConnection();
     AddMinecartConnections();
+
+    foreach (WorldLocation worldLocation in Graph.Locations.Values)
+    {
+        Monitor.Log(
+            $"{worldLocation.Location.Name}: " +
+            $"{worldLocation.Warps.Count} warps, " +
+            $"{worldLocation.Buildings.Count} building connections",
+            LogLevel.Info
+        );
+    }
 
   }
 
@@ -144,6 +127,34 @@ internal class WorldGraphService
   private void AddMinecartConnections()
   {
       // TODO
+  }
+
+  private void AddFarmhouseConnection()
+  {
+      Farm? farm = Game1.getFarm();
+
+      if (farm == null || farm.mainFarmhouseEntry == null)
+          return;
+
+      WorldLocation? farmLocation = Graph.GetLocation("Farm");
+
+      if (farmLocation == null)
+          return;
+
+      farmLocation.Buildings.Add(new BuildingConnection
+      {
+          SourceName = "Farm",
+          TargetName = "FarmHouse",
+          ExitTile = farm.mainFarmhouseEntry.Value,
+          ArrivalTile = new Point(5, 8) //temporary
+      });
+
+      Monitor.Log(
+          $"Building connection: Farm " +
+          $"({farm.mainFarmhouseEntry.Value.X},{farm.mainFarmhouseEntry.Value.Y}) " +
+          $"-> FarmHouse (5,8)",
+          LogLevel.Info
+      );
   }
 
   public WorldLocation? GetLocation(string locationName)
