@@ -40,10 +40,62 @@ internal class WorldGraphService
 
     foreach (GameLocation location in Game1.locations)
     {
+      Monitor.Log(
+          $"Checking buildings for {location.Name}: " +
+          $"{location.buildings?.Count ?? 0} buildings",
+          LogLevel.Info
+      );
+
       var worldLocation = new WorldLocation
       {
         Location = location
       };
+
+      if (location.buildings != null)
+      {
+          foreach (Building building in location.buildings)
+          {
+              if (building.indoors.Value == null)
+                  continue;
+
+              Point door = building.getPointForHumanDoor();
+
+               GameLocation indoors = building.indoors.Value;
+
+              if (indoors.warps.Count == 0)
+              {
+                  Monitor.Log(
+                      $"Building {indoors.Name} has no interior warp.",
+                      LogLevel.Warn
+                  );
+
+                  continue;
+              }
+
+              Warp interiorWarp = indoors.warps[0];
+
+              Point arrivalTile = new(
+                  interiorWarp.X,
+                  interiorWarp.Y - 1
+              );
+
+              worldLocation.Buildings.Add(new BuildingConnection
+              {
+                  SourceName = location.Name,
+                  TargetName = indoors.Name,
+                  ExitTile = door,
+                  ArrivalTile = arrivalTile
+              });
+
+
+              Monitor.Log(
+                  $"Building connection: {location.Name} " +
+                  $"({door.X},{door.Y}) -> " +
+                  $"{indoors.Name} ({arrivalTile.X},{arrivalTile.Y})",
+                  LogLevel.Info
+              );
+          }
+      }
 
       foreach (Warp warp in location.warps)
       {
@@ -67,7 +119,6 @@ internal class WorldGraphService
       Graph.Locations.Add(location.Name, worldLocation);
     }
 
-    AddFarmHouseConnection();
     AddMinecartConnections();
 
   }
@@ -93,64 +144,6 @@ internal class WorldGraphService
   private void AddMinecartConnections()
   {
       // TODO
-  }
-
-  private void AddFarmHouseConnection()
-  {
-    Farm? farm = Game1.getFarm();
-
-    if (farm == null)
-    {
-        Monitor.Log("Could not find Farm.", LogLevel.Error);
-        return;
-    }
-
-    WorldLocation? farmLocation = Graph.GetLocation("Farm");
-
-    if (farmLocation == null)
-    {
-        Monitor.Log("Farm is not in the world graph.", LogLevel.Error);
-        return;
-    }
-
-    if (Graph.GetLocation("FarmHouse") == null)
-    {
-        Monitor.Log(
-            "FarmHouse is not in the world graph.",
-            LogLevel.Error);
-
-        return;
-    }
-
-    farmLocation.Warps.Add(new WarpConnection
-    {
-        SourceName = "Farm",
-        TargetName = "FarmHouse",
-        ExitTile = new Point(64, 15),
-        ArrivalTile = new Point(5, 8)
-    });
-
-    Monitor.Log(
-        "Added Farm -> FarmHouse connection: " +
-        "(64,15) -> FarmHouse (5,8)",
-        LogLevel.Info);
-    
-  }
-
-  private Building? FindBuildingWithInterior(
-    GameLocation location,
-    string interiorName)
-  {
-      if (location is not Farm farm)
-          return null;
-
-      foreach (Building building in farm.buildings)
-      {
-          if (building.indoors.Value?.Name == interiorName)
-              return building;
-      }
-
-      return null;
   }
 
   public WorldLocation? GetLocation(string locationName)
