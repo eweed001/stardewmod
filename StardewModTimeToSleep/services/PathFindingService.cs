@@ -25,12 +25,20 @@ internal class PathFindingService
     this.worldGraph = worldGraph;
   }
 
+  private class RouteState
+{
+    public string LocationName { get; init; } = "";
+    public Point Position { get; init; }
+    public int Distance { get; init; }
+    public List<string> Path { get; init; } = new();
+}
+
   public int FindDistanceToHome(GameLocation currentLocation, Point playerTile)
   {
 
      List<string>? path = FindLocationPath(
-        currentLocation.Name,
-        HomeLocation);
+        currentLocation,
+        playerTile);
 
       if (path == null)
       {
@@ -45,7 +53,145 @@ internal class PathFindingService
       Monitor.Log(
           $"Location route: {string.Join(" -> ", path)}",
           LogLevel.Info);
-      
+
+      return CalculateRouteDistance(path, 
+        currentLocation, playerTile);
+  }
+
+  //temp bfs solution 
+  private List<string>? FindLocationPath(
+    GameLocation currentLocation,
+    Point playerTile)
+  {
+      var queue = new PriorityQueue<RouteState, int>();
+
+      var start = new RouteState
+      {
+          LocationName = currentLocation.Name,
+          Position = playerTile,
+          Distance = 0,
+          Path = new List<string> { currentLocation.Name }
+      };
+
+      queue.Enqueue(start, 0);
+
+      var bestDistance = new Dictionary<string, int>
+      {
+          [currentLocation.Name] = 0
+      };
+
+      while (queue.Count > 0)
+      {
+          RouteState state = queue.Dequeue();
+
+          if (state.LocationName == HomeLocation)
+              return state.Path;
+
+          WorldLocation? worldLocation =
+              worldGraph.GetLocation(state.LocationName);
+
+          if (worldLocation == null)
+              continue;
+
+          GameLocation location =
+              Game1.getLocationFromName(state.LocationName);
+
+          // Normal warps
+          foreach (WarpConnection warp in worldLocation.Warps)
+          {
+              GameLocation target =
+                  Game1.getLocationFromName(warp.TargetName);
+
+              Point exitTile =
+                  GetWarpExitTile(location, warp);
+
+              int distance =
+                  aStar.FindDistance(
+                      location,
+                      state.Position,
+                      exitTile);
+
+              if (distance == int.MaxValue)
+                  continue;
+
+              int newDistance =
+                  state.Distance + distance;
+
+              if (bestDistance.TryGetValue(
+                      warp.TargetName,
+                      out int oldDistance)
+                  && oldDistance <= newDistance)
+              {
+                  continue;
+              }
+
+              bestDistance[warp.TargetName] = newDistance;
+
+              queue.Enqueue(
+                  new RouteState
+                  {
+                      LocationName = warp.TargetName,
+                      Position = warp.ArrivalTile,
+                      Distance = newDistance,
+                      Path = new List<string>(state.Path)
+                      {
+                          warp.TargetName
+                      }
+                  },
+                  newDistance);
+          }
+
+          // Building connections
+          foreach (BuildingConnection building in worldLocation.Buildings)
+          {
+              GameLocation target =
+                  Game1.getLocationFromName(building.TargetName);
+
+              int distance =
+                  aStar.FindDistance(
+                      location,
+                      state.Position,
+                      building.ExitTile);
+
+              if (distance == int.MaxValue)
+                  continue;
+
+              int newDistance =
+                  state.Distance + distance;
+
+              if (bestDistance.TryGetValue(
+                      building.TargetName,
+                      out int oldDistance)
+                  && oldDistance <= newDistance)
+              {
+                  continue;
+              }
+
+              bestDistance[building.TargetName] = newDistance;
+
+              queue.Enqueue(
+                  new RouteState
+                  {
+                      LocationName = building.TargetName,
+                      Position = building.ArrivalTile,
+                      Distance = newDistance,
+                      Path = new List<string>(state.Path)
+                      {
+                          building.TargetName
+                      }
+                  },
+                  newDistance);
+          }
+      }
+
+      return null;
+  }
+
+  private int CalculateRouteDistance(
+    List<string> path,
+    GameLocation currentLocation,
+    Point playerTile)
+  {
       int totalDistance = 0;
 
       GameLocation location = currentLocation;
@@ -62,22 +208,15 @@ internal class PathFindingService
           if (worldLocation == null)
               return int.MaxValue;
 
-          // First check normal warps.
+          // Normal warp
           WarpConnection? warp =
               worldLocation.Warps
                   .FirstOrDefault(w => w.TargetName == to);
 
           if (warp != null)
           {
-
-            Monitor.Log(
-                $"A*: {from} ({position}) -> {to} warp exit ({warp.ExitTile})",
-                LogLevel.Info);
-              Point exitTile = GetWarpExitTile(location, warp);
-
-              Monitor.Log(
-                  $"A*: {from} ({position}) -> {to} warp exit ({exitTile})",
-                  LogLevel.Info);
+              Point exitTile =
+                  GetWarpExitTile(location, warp);
 
               int distance = aStar.FindDistance(
                   location,
@@ -95,17 +234,13 @@ internal class PathFindingService
               continue;
           }
 
-          // Then check building connections.
+          // Building connection
           BuildingConnection? building =
               worldLocation.Buildings
                   .FirstOrDefault(b => b.TargetName == to);
 
           if (building != null)
           {
-            Monitor.Log(
-                $"A*: {from} ({position}) -> {to} building exit ({building.ExitTile})",
-                LogLevel.Info);
-
               int distance = aStar.FindDistance(
                   location,
                   position,
@@ -125,7 +260,7 @@ internal class PathFindingService
           return int.MaxValue;
       }
 
-      // Finally, walk from the last arrival point to the bed.
+      // Final path from arrival point to bed.
       if (location.Name == HomeLocation)
       {
           Point bedTile = GetBedTile(location);
@@ -143,72 +278,6 @@ internal class PathFindingService
       }
 
       return totalDistance;
-  }
-
-  //temp bfs solution 
-  private List<string>? FindLocationPath(
-    string startLocation,
-    string targetLocation)
-  {
-      var queue = new Queue<string>();
-      var previous = new Dictionary<string, string>();
-
-      queue.Enqueue(startLocation);
-      previous[startLocation] = "";
-
-      while (queue.Count > 0)
-      {
-          string current = queue.Dequeue();
-
-          if (current == targetLocation)
-              break;
-
-          WorldLocation? location =
-              this.worldGraph.GetLocation(current);
-
-          if (location == null)
-              continue;
-
-          // Normal warps
-          foreach (WarpConnection warp in location.Warps)
-          {
-              string next = warp.TargetName;
-
-              if (previous.ContainsKey(next))
-                  continue;
-
-              previous[next] = current;
-              queue.Enqueue(next);
-          }
-
-          // Building entrances
-          foreach (BuildingConnection building in location.Buildings)
-          {
-              string next = building.TargetName;
-
-              if (previous.ContainsKey(next))
-                  continue;
-
-              previous[next] = current;
-              queue.Enqueue(next);
-          }
-      }
-
-      if (!previous.ContainsKey(targetLocation))
-          return null;
-
-      var path = new List<string>();
-      string locationName = targetLocation;
-
-      while (locationName != "")
-      {
-          path.Add(locationName);
-          locationName = previous[locationName];
-      }
-
-      path.Reverse();
-
-      return path;
   }
 
   private Point GetWarpExitTile(

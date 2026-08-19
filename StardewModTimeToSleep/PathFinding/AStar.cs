@@ -78,7 +78,7 @@ internal sealed class AStar
 
       if (exploredNodes % 1000 == 0)
       {
-          Monitor.Log($"A* explored {exploredNodes} nodes", LogLevel.Debug);
+          Monitor.Log($"A* explored {exploredNodes} nodes", LogLevel.Trace);
       }
       if (exploredNodes > 50000)
       {
