@@ -320,7 +320,7 @@ private void FindPathsRecursive(
 
       return tile;
   }
-  
+
   private Point? GetBedTile(GameLocation location)
   {
     if (location is FarmHouse farmhouse)

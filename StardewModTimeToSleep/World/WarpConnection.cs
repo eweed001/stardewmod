@@ -23,9 +23,5 @@ public sealed class WarpConnection
     }
 
     public bool IsMinecart { get; init; } = false;
-
-    // IEnumerable<WarpConnection> GetWarps(string locationName);
-
-    // WorldLocation? GetLocation(string locationName);
     
 }
