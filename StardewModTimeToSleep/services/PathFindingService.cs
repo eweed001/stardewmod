@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewModTimeToSleep.PathFinding;
 using StardewModTimeToSleep.World;
+using StardewValley.Locations;
 
 namespace StardewModTimeToSleep.services;
 
@@ -35,157 +36,166 @@ internal class PathFindingService
 
   public int FindDistanceToHome(GameLocation currentLocation, Point playerTile)
   {
+    List<List<string>> paths = FindLocationPaths(
+      currentLocation.Name,
+      HomeLocation);
 
-     List<string>? path = FindLocationPath(
+    if (paths.Count == 0)
+    {
+      Monitor.Log(
+          $"Could not find any route from " +
+          $"{currentLocation.Name} to {HomeLocation}.",
+          LogLevel.Warn);
+
+      return int.MaxValue;
+    }
+
+    int shortestDistance = int.MaxValue;
+    List<string>? shortestPath = null;
+
+    foreach (List<string> alternativePath in paths)
+    {
+      Monitor.Log(
+        $"Possible route: " +
+        $"{string.Join(" -> ", alternativePath)}",
+        LogLevel.Info);
+
+      int distance = CalculateRouteDistance(
+        alternativePath,
         currentLocation,
         playerTile);
 
-      if (path == null)
-      {
-          Monitor.Log(
-              $"Could not find route from " +
-              $"{currentLocation.Name} to {HomeLocation}.",
-              LogLevel.Warn);
-
-          return int.MaxValue;
-      }
-
       Monitor.Log(
-          $"Location route: {string.Join(" -> ", path)}",
-          LogLevel.Info);
+        $"Route distance: {distance} tiles",
+        LogLevel.Info);
 
-      return CalculateRouteDistance(path, 
-        currentLocation, playerTile);
-  }
-
-  //temp bfs solution 
-  private List<string>? FindLocationPath(
-    GameLocation currentLocation,
-    Point playerTile)
-  {
-      var queue = new PriorityQueue<RouteState, int>();
-
-      var start = new RouteState
+      if (distance < shortestDistance)
       {
-          LocationName = currentLocation.Name,
-          Position = playerTile,
-          Distance = 0,
-          Path = new List<string> { currentLocation.Name }
-      };
-
-      queue.Enqueue(start, 0);
-
-      var bestDistance = new Dictionary<string, int>
-      {
-          [currentLocation.Name] = 0
-      };
-
-      while (queue.Count > 0)
-      {
-          RouteState state = queue.Dequeue();
-
-          if (state.LocationName == HomeLocation)
-              return state.Path;
-
-          WorldLocation? worldLocation =
-              worldGraph.GetLocation(state.LocationName);
-
-          if (worldLocation == null)
-              continue;
-
-          GameLocation location =
-              Game1.getLocationFromName(state.LocationName);
-
-          // Normal warps
-          foreach (WarpConnection warp in worldLocation.Warps)
-          {
-              GameLocation target =
-                  Game1.getLocationFromName(warp.TargetName);
-
-              Point exitTile =
-                  GetWarpExitTile(location, warp);
-
-              int distance =
-                  aStar.FindDistance(
-                      location,
-                      state.Position,
-                      exitTile);
-
-              if (distance == int.MaxValue)
-                  continue;
-
-              int newDistance =
-                  state.Distance + distance;
-
-              if (bestDistance.TryGetValue(
-                      warp.TargetName,
-                      out int oldDistance)
-                  && oldDistance <= newDistance)
-              {
-                  continue;
-              }
-
-              bestDistance[warp.TargetName] = newDistance;
-
-              queue.Enqueue(
-                  new RouteState
-                  {
-                      LocationName = warp.TargetName,
-                      Position = warp.ArrivalTile,
-                      Distance = newDistance,
-                      Path = new List<string>(state.Path)
-                      {
-                          warp.TargetName
-                      }
-                  },
-                  newDistance);
-          }
-
-          // Building connections
-          foreach (BuildingConnection building in worldLocation.Buildings)
-          {
-              GameLocation target =
-                  Game1.getLocationFromName(building.TargetName);
-
-              int distance =
-                  aStar.FindDistance(
-                      location,
-                      state.Position,
-                      building.ExitTile);
-
-              if (distance == int.MaxValue)
-                  continue;
-
-              int newDistance =
-                  state.Distance + distance;
-
-              if (bestDistance.TryGetValue(
-                      building.TargetName,
-                      out int oldDistance)
-                  && oldDistance <= newDistance)
-              {
-                  continue;
-              }
-
-              bestDistance[building.TargetName] = newDistance;
-
-              queue.Enqueue(
-                  new RouteState
-                  {
-                      LocationName = building.TargetName,
-                      Position = building.ArrivalTile,
-                      Distance = newDistance,
-                      Path = new List<string>(state.Path)
-                      {
-                          building.TargetName
-                      }
-                  },
-                  newDistance);
-          }
+        shortestDistance = distance;
+        shortestPath = alternativePath;
       }
+    }
 
-      return null;
+    if (shortestPath == null ||
+          shortestDistance == int.MaxValue)
+    {
+      Monitor.Log(
+        $"Could not find a walkable route from " +
+        $"{currentLocation.Name} to {HomeLocation}.",
+        LogLevel.Warn);
+
+      return int.MaxValue;
+    }
+
+    Monitor.Log(
+      $"Shortest route: " +
+      $"{string.Join(" -> ", shortestPath)} " +
+      $"({shortestDistance} tiles)",
+      LogLevel.Info);
+
+    return shortestDistance;
   }
+
+  private List<List<string>> FindLocationPaths(
+    string startLocation,
+    string targetLocation)
+{
+    var paths = new List<List<string>>();
+
+    var currentPath = new List<string>
+    {
+        startLocation
+    };
+
+    var visited = new HashSet<string>
+    {
+        startLocation
+    };
+
+    FindPathsRecursive(
+        startLocation,
+        targetLocation,
+        currentPath,
+        visited,
+        paths);
+
+    return paths;
+}
+
+
+private void FindPathsRecursive(
+    string currentLocation,
+    string targetLocation,
+    List<string> currentPath,
+    HashSet<string> visited,
+    List<List<string>> paths)
+{
+    if (currentLocation == targetLocation)
+    {
+        paths.Add(new List<string>(currentPath));
+        return;
+    }
+
+    WorldLocation? location =
+        this.worldGraph.GetLocation(currentLocation);
+
+    if (location == null)
+        return;
+
+    HashSet<string> warpTargets = new();
+
+    // Normal warps
+    foreach (WarpConnection warp in location.Warps)
+    {
+      string next = warp.TargetName;
+
+      if (!warpTargets.Add(next))
+        continue;
+
+      if (visited.Contains(next))
+          continue;
+
+      visited.Add(next);
+      currentPath.Add(next);
+
+      FindPathsRecursive(
+          next,
+          targetLocation,
+          currentPath,
+          visited,
+          paths);
+
+      currentPath.RemoveAt(currentPath.Count - 1);
+      visited.Remove(next);
+    }
+
+    HashSet<string> buildingTargets = new();
+
+    // Building entrances
+    foreach (BuildingConnection building in location.Buildings)
+    {
+      string next = building.TargetName;
+
+      if (!buildingTargets.Add(next))
+        continue;
+
+      if (visited.Contains(next))
+          continue;
+
+      visited.Add(next);
+      currentPath.Add(next);
+
+      FindPathsRecursive(
+          next,
+          targetLocation,
+          currentPath,
+          visited,
+          paths);
+
+      currentPath.RemoveAt(currentPath.Count - 1);
+      visited.Remove(next);
+    }
+}
 
   private int CalculateRouteDistance(
     List<string> path,
@@ -199,82 +209,89 @@ internal class PathFindingService
 
       for (int i = 0; i < path.Count - 1; i++)
       {
-          string from = path[i];
-          string to = path[i + 1];
+        string from = path[i];
+        string to = path[i + 1];
 
-          WorldLocation? worldLocation =
-              worldGraph.GetLocation(from);
+        WorldLocation? worldLocation =
+            worldGraph.GetLocation(from);
 
-          if (worldLocation == null)
+        if (worldLocation == null)
+            return int.MaxValue;
+
+        // Normal warp
+        WarpConnection? warp =
+            worldLocation.Warps
+                .FirstOrDefault(w => w.TargetName == to);
+
+        if (warp != null)
+        {
+            Point exitTile =
+                GetWarpExitTile(location, warp);
+
+            int distance = aStar.FindDistance(
+                location,
+                position,
+                exitTile);
+
+            if (distance == int.MaxValue)
+                return int.MaxValue;
+
+            Monitor.Log(
+              $"{from} -> {to}: {distance} tiles",
+              LogLevel.Debug);
+
+            totalDistance += distance;
+
+            location = Game1.getLocationFromName(to);
+            position = warp.ArrivalTile;
+
+            continue;
+        }
+
+        // Building connection
+        BuildingConnection? building =
+            worldLocation.Buildings
+                .FirstOrDefault(b => b.TargetName == to);
+
+        if (building != null)
+        {
+          int distance = aStar.FindDistance(
+              location,
+              position,
+              building.ExitTile);
+
+          if (distance == int.MaxValue)
               return int.MaxValue;
 
-          // Normal warp
-          WarpConnection? warp =
-              worldLocation.Warps
-                  .FirstOrDefault(w => w.TargetName == to);
+          totalDistance += distance;
 
-          if (warp != null)
-          {
-              Point exitTile =
-                  GetWarpExitTile(location, warp);
+          location = Game1.getLocationFromName(to);
+          position = building.ArrivalTile;
 
-              int distance = aStar.FindDistance(
-                  location,
-                  position,
-                  exitTile);
+          continue;
+        }
 
-              if (distance == int.MaxValue)
-                  return int.MaxValue;
-
-              totalDistance += distance;
-
-              location = Game1.getLocationFromName(to);
-              position = warp.ArrivalTile;
-
-              continue;
-          }
-
-          // Building connection
-          BuildingConnection? building =
-              worldLocation.Buildings
-                  .FirstOrDefault(b => b.TargetName == to);
-
-          if (building != null)
-          {
-              int distance = aStar.FindDistance(
-                  location,
-                  position,
-                  building.ExitTile);
-
-              if (distance == int.MaxValue)
-                  return int.MaxValue;
-
-              totalDistance += distance;
-
-              location = Game1.getLocationFromName(to);
-              position = building.ArrivalTile;
-
-              continue;
-          }
-
-          return int.MaxValue;
+        return int.MaxValue;
       }
 
       // Final path from arrival point to bed.
       if (location.Name == HomeLocation)
       {
-          Point bedTile = GetBedTile(location);
+        Point? bedTile = GetBedTile(location);
 
-          int distanceToBed =
-              aStar.FindDistance(
-                  location,
-                  position,
-                  bedTile);
+        if (bedTile == null)
+          return int.MaxValue;
 
-          if (distanceToBed == int.MaxValue)
-              return int.MaxValue;
+        int distanceToBed =
+            aStar.FindDistance(
+                location,
+                position,
+                bedTile.Value);
 
-          totalDistance += distanceToBed;
+        if (distanceToBed == int.MaxValue)
+            return int.MaxValue;
+
+        totalDistance += distanceToBed;
       }
 
       return totalDistance;
@@ -303,26 +320,18 @@ internal class PathFindingService
 
       return tile;
   }
-
-  private WarpConnection? FindWarpTo(string fromLocation, string toLocation)
+  
+  private Point? GetBedTile(GameLocation location)
   {
-    WorldLocation? location = this.worldGraph.GetLocation(fromLocation);
-
-    if(location == null)
-      return null;
-
-    foreach(WarpConnection warp in location.Warps)
+    if (location is FarmHouse farmhouse)
     {
-      if(warp.TargetName == toLocation)
-        return warp;
+      return farmhouse.GetPlayerBedSpot();
     }
+    Monitor.Log(
+      $"Could not find bed in {location.Name}.",
+      LogLevel.Warn);
 
     return null;
-  }
-  private Point GetBedTile(GameLocation location)
-  {
-      // TODO: Find the actual bed dynamically.
-      return new Point(5, 8);
   }
 
 }
