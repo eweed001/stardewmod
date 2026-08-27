@@ -18,6 +18,9 @@ internal class PathFindingService
   private readonly WorldGraphService worldGraph;
 
   private const string HomeLocation = "FarmHouse";
+  private const double PixelsPerTile = 64.0;
+  private const double MovementMultiplier = 0.066;
+  private const double RealMillisecondsPerGameMinute = 700.0;
 
   public PathFindingService(IMonitor monitor, WorldGraphService worldGraph)
   {
@@ -27,14 +30,14 @@ internal class PathFindingService
   }
 
   private class RouteState
-{
-    public string LocationName { get; init; } = "";
-    public Point Position { get; init; }
-    public int Distance { get; init; }
-    public List<string> Path { get; init; } = new();
-}
+  {
+      public string LocationName { get; init; } = "";
+      public Point Position { get; init; }
+      public int Distance { get; init; }
+      public List<string> Path { get; init; } = new();
+  }
 
-  public int FindDistanceToHome(GameLocation currentLocation, Point playerTile)
+  public PathFindingResult? FindDistanceToHome(GameLocation currentLocation, Point playerTile)
   {
     List<List<string>> paths = FindLocationPaths(
       currentLocation.Name,
@@ -47,7 +50,7 @@ internal class PathFindingService
           $"{currentLocation.Name} to {HomeLocation}.",
           LogLevel.Warn);
 
-      return int.MaxValue;
+      return null;
     }
 
     int shortestDistance = int.MaxValue;
@@ -84,7 +87,7 @@ internal class PathFindingService
         $"{currentLocation.Name} to {HomeLocation}.",
         LogLevel.Warn);
 
-      return int.MaxValue;
+      return null;
     }
 
     Monitor.Log(
@@ -93,7 +96,24 @@ internal class PathFindingService
       $"({shortestDistance} tiles)",
       LogLevel.Info);
 
-    return shortestDistance;
+    double gameMinutes = CalculateGameMinutes(shortestDistance);
+
+    Monitor.Log(
+        $"Estimated travel time: {gameMinutes:F1} game minutes",
+        LogLevel.Info);
+
+    int arrivalTime = CalculateArrivalTime(gameMinutes);
+
+    Monitor.Log(
+        $"Estimated arrival time: {arrivalTime}",
+        LogLevel.Info);
+
+    return new PathFindingResult
+    {
+      Distance = shortestDistance,
+      TravelTime = gameMinutes,
+      ArrivalTime = arrivalTime
+    };
   }
 
   private List<List<string>> FindLocationPaths(
@@ -295,6 +315,39 @@ private void FindPathsRecursive(
       }
 
       return totalDistance;
+  }
+
+  private double CalculateGameMinutes(int tileDistance)
+  {
+    float effectiveSpeed =
+      Game1.player.speed
+      + Game1.player.addedSpeed
+      + Game1.player.temporarySpeedBuff;
+
+    double tilesPerGameMinute =
+      effectiveSpeed
+      * MovementMultiplier
+      * RealMillisecondsPerGameMinute
+      / PixelsPerTile;
+
+      return tileDistance / tilesPerGameMinute;
+  }
+
+  private int CalculateArrivalTime(double gameMinutes)
+  {
+      int currentTime = Game1.timeOfDay;
+
+      int minutesToAdd = (int)Math.Ceiling(gameMinutes);
+
+      int hours = currentTime / 100;
+      int minutes = currentTime % 100;
+
+      minutes += minutesToAdd;
+
+      hours += minutes / 60;
+      minutes %= 60;
+
+      return hours * 100 + minutes;
   }
 
   private Point GetWarpExitTile(

@@ -86,12 +86,14 @@ namespace StardewModTimeToSleep
                 LogLevel.Info
             );
             
-            int distance = this.pathFindingService.FindDistanceToHome(
+            PathFindingResult? result = this.pathFindingService.FindDistanceToHome(
                 location,
                 start
             );
+            if (result == null)
+                return;
 
-            this.Monitor.Log($"Distance to home: {distance} tiles", 
+            this.Monitor.Log($"Distance to home: {result.Distance} tiles", 
                 LogLevel.Info);
         }
 
