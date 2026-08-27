@@ -5,6 +5,7 @@ using StardewModTimeToSleep.World;
 using StardewModTimeToSleep.PathFinding;
 using Microsoft.Xna.Framework;
 using StardewModTimeToSleep.services;
+using StardewModTimeToSleep.ui;
 
 namespace StardewModTimeToSleep
 {
@@ -18,6 +19,7 @@ namespace StardewModTimeToSleep
         private WorldGraphService worldGraphService = null!;
         private AStar aStar = null!;
         private PathFindingService pathFindingService = null!;
+        private TimeToSleepWidget? timeToSleepWidget;
 
         /*********
         ** Public methods
@@ -32,9 +34,11 @@ namespace StardewModTimeToSleep
             this.aStar = new AStar(this.Monitor);
             this.pathFindingService = new PathFindingService(this.Monitor, 
                 this.worldGraphService);
+            this.timeToSleepWidget = new TimeToSleepWidget(this.Monitor);
 
             helper.Events.GameLoop.SaveLoaded += this.OnSaveLoaded;
-            helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
+            helper.Events.Display.Rendered += this.OnRendered;
+            helper.Events.GameLoop.TimeChanged += this.OnTimeChanged;
         }
 
         //Todos:
@@ -54,31 +58,25 @@ namespace StardewModTimeToSleep
             this.Monitor.Log("World graph built.", LogLevel.Debug);
         }
 
-        /// <inheritdoc cref="IGameLoopEvents.UpdateTicked"/>
-        private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
+        private void OnTimeChanged(object? sender, TimeChangedEventArgs e)
         {
-            // ignore if player hasn't loaded a save yet
-            if (!Context.IsWorldReady)
+            if (!Context.IsWorldReady || Game1.paused)
                 return;
 
-            //Every 5 seconds (and when game isn't paused), run logic loop
-            if(e.IsMultipleOf(500)&&!Game1.paused)
-            {
-                //Updates the time to home based on player's current location
-                this.updateTimeToHome();
-                // this.Monitor.Log($"{Game1.player.Name} is at {Game1.player.currentLocation}, loc", LogLevel.Debug);
-                // this.Monitor.Log($"{Game1.player.Name} is at {Game1.player.Tile.X}, {Game1.player.Tile.Y}, tile vector", LogLevel.Debug);
-            }
+            this.updateTimeToHome();
+        }
+
+        private void OnRendered(object? sender, RenderedEventArgs e)
+        {
+            if (Game1.activeClickableMenu == null)
+                this.timeToSleepWidget?.Draw();
         }
 
         /// <summary>Updates the timeToHome</summary>
         private void updateTimeToHome()
         {
             GameLocation location = Game1.player.currentLocation;
-
             Point start = Game1.player.TilePoint;
-
-            this.Monitor.Log($"Player tile: {start}", LogLevel.Info);
 
             Monitor.Log(
                 $"Location: {Game1.currentLocation.Name}, " +
@@ -93,7 +91,12 @@ namespace StardewModTimeToSleep
             if (result == null)
                 return;
 
-            this.Monitor.Log($"Distance to home: {result.Distance} tiles", 
+            this.timeToSleepWidget?.SetResult(result);
+
+            Monitor.Log(
+                $"Distance: {result.Distance} tiles, " +
+                $"Travel time: {result.TravelTime:F1} minutes, " +
+                $"Arrival: {result.ArrivalTime}",
                 LogLevel.Info);
         }
 
